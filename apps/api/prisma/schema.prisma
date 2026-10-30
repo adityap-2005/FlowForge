@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum WorkflowExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum StepExecutionStatus {
+  PENDING
+  RUNNING
+  RETRY_WAIT
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+model Workflow {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  versions    WorkflowVersion[]
+  executions  WorkflowExecution[]
+}
+
+model WorkflowVersion {
+  id         String   @id @default(cuid())
+  workflowId String
+  version    Int
+  definition Json
+  createdAt  DateTime @default(now())
+
+  workflow   Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  executions WorkflowExecution[]
+
+  @@unique([workflowId, version])
+}
+
+model WorkflowExecution {
+  id               String                  @id @default(cuid())
+  workflowId       String
+  workflowVersionId String
+  status           WorkflowExecutionStatus @default(PENDING)
+  input            Json?
+  output           Json?
+  error            String?
+  createdAt        DateTime                @default(now())
+  startedAt        DateTime?
+  completedAt      DateTime?
+
+  workflow        Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowVersion WorkflowVersion @relation(fields: [workflowVersionId], references: [id], onDelete: Restrict)
+  steps           StepExecution[]
+
+  @@index([workflowId, createdAt])
+  @@index([status, createdAt])
+}
+
+model StepExecution {
+  id          String              @id @default(cuid())
+  executionId String
+  stepId      String
+  stepType    String
+  status      StepExecutionStatus @default(PENDING)
+  input       Json?
+  output      Json?
+  error       String?
+  attempts    Int                 @default(0)
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime            @default(now())
+
+  execution WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@unique([executionId, stepId])
+  @@index([executionId, status])
+}
