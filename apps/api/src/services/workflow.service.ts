@@ -1,4 +1,4 @@
-import prisma from "../config/database.js";
+import { prisma } from "@flowforge/backend-core";
 import { Prisma } from "../generated/prisma/client.js";
 
 import AppError from "../utils/AppError.js";

@@ -1,0 +1,18 @@
+{
+  "name": "worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/worker.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "start": "node dist/worker.js"
+  },
+  "dependencies": {
+    "@flowforge/backend-core": "^1.0.0",
+    "bullmq": "^6.5.3",
+    "dotenv": "^18.0.9",
+    "ioredis": "^6.0.0"
+  }
+}
