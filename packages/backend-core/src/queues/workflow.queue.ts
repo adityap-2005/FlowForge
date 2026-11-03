@@ -1,4 +1,3 @@
-
 import { Queue } from "bullmq";
 import redisConnection from "./redis.connection.js";
 
@@ -13,12 +12,18 @@ const workflowQueue = new Queue<WorkflowJobData>(
     }
 );
 
-export async function addWorkflowJob(executionId: string) {
+export async function addWorkflowJob(
+    executionId: string,
+    delay = 0
+) {
     return workflowQueue.add(
         "execute-workflow",
         { executionId },
         {
-            jobId: executionId,
+            jobId: delay > 0
+                ? `${executionId}-retry-${Date.now()}`
+                : executionId,
+            delay,
         }
     );
 }

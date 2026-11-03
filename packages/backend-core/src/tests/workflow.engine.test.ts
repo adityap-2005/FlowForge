@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import prisma from "../config/database.js";
 import workflowEngine from "../engine/workflow.engine.js";
 import handlerRegistry from "../engine/handler.registry.js";
+import StepExecutionError from "../errors/step-execution.error.js";
 
 vi.mock("../config/database.js", () => ({
     default: {
@@ -80,6 +81,7 @@ describe("WorkflowEngine", () => {
                     id: "step-execution-1",
                     stepId: "step-1",
                     status: "PENDING",
+                    attempts: 0
                 },
             ],
         };
@@ -135,6 +137,7 @@ describe("WorkflowEngine", () => {
                     id: "step-execution-1",
                     stepId: "step-1",
                     status: "PENDING",
+                    attempts: 0,
                 },
                 {
                     id: "step-execution-2",
@@ -155,8 +158,10 @@ describe("WorkflowEngine", () => {
         vi.mocked(prisma.stepExecution.update).mockResolvedValue({} as never);
 
         vi.mocked(handlerRegistry.get).mockReturnValue({
-            execute: vi.fn().mockRejectedValue(new Error("HTTP request failed")),
-        });
+            execute: vi.fn().mockRejectedValue(
+                new StepExecutionError("HTTP request failed", false)
+            ),
+        } as never);
 
         vi.mocked(prisma.stepExecution.updateMany).mockResolvedValue({
             count: 1,
@@ -217,6 +222,7 @@ describe("WorkflowEngine", () => {
                     id: "step-execution-1",
                     stepId: "step-1",
                     status: "PENDING",
+                    attempts: 0,
                 },
             ],
         };
@@ -236,8 +242,10 @@ describe("WorkflowEngine", () => {
         vi.mocked(prisma.workflowExecution.update).mockResolvedValue({} as never);
 
         vi.mocked(handlerRegistry.get).mockReturnValue({
-            execute: vi.fn().mockRejectedValue(new Error("External API unavailable")),
-        });
+            execute: vi.fn().mockRejectedValue(
+                new StepExecutionError("External API unavailable", false)
+            ),
+        } as never);
 
         await workflowEngine.executeWorkflow("execution-123");
 
@@ -299,7 +307,10 @@ describe("WorkflowEngine", () => {
                         {
                             id: "step-1",
                             type: "http",
-                            config: { url: "https://example.com", method: "GET" },
+                            config: {
+                                url: "https://example.com",
+                                method: "GET",
+                            },
                             retry: {
                                 maxAttempts: 3,
                                 delayMs: 0,
@@ -314,17 +325,16 @@ describe("WorkflowEngine", () => {
                     id: "step-execution-1",
                     stepId: "step-1",
                     status: "PENDING",
+                    attempts: 0,
                 },
             ],
         };
 
-        vi.mocked(prisma.workflowExecution.updateMany).mockResolvedValue({
-            count: 1,
-        } as never);
+        vi.mocked(prisma.workflowExecution.updateMany)
+            .mockResolvedValue({ count: 1 } as never);
 
-        vi.mocked(prisma.workflowExecution.findUnique).mockResolvedValue(
-            execution as never
-        );
+        vi.mocked(prisma.workflowExecution.findUnique)
+            .mockResolvedValue(execution as never);
 
         vi.mocked(prisma.stepExecution.update).mockResolvedValue({} as never);
         vi.mocked(prisma.workflowExecution.update).mockResolvedValue({} as never);
@@ -338,8 +348,28 @@ describe("WorkflowEngine", () => {
             execute,
         } as never);
 
-        await workflowEngine.executeWorkflow("execution-retry");
+        // First invocation: attempt 1 fails.
+        const firstDelay = await workflowEngine.executeWorkflow("execution-retry");
+        expect(firstDelay).toBe(0);
+        expect(execute).toHaveBeenCalledTimes(1);
 
+        // Simulate the database state before the second invocation.
+        execution.steps[0].attempts = 1;
+        execution.steps[0].status = "RETRY_WAIT";
+
+        // Second invocation: attempt 2 fails.
+        const secondDelay = await workflowEngine.executeWorkflow("execution-retry");
+        expect(secondDelay).toBe(0);
+        expect(execute).toHaveBeenCalledTimes(2);
+
+        // Simulate the database state before the third invocation.
+        execution.steps[0].attempts = 2;
+        execution.steps[0].status = "RETRY_WAIT";
+
+        // Third invocation: attempt 3 succeeds.
+        const thirdDelay = await workflowEngine.executeWorkflow("execution-retry");
+
+        expect(thirdDelay).toBeNull();
         expect(execute).toHaveBeenCalledTimes(3);
 
         expect(prisma.stepExecution.update).toHaveBeenCalledWith(
@@ -359,7 +389,7 @@ describe("WorkflowEngine", () => {
             })
         );
     });
-
+    
     it("should fail the workflow when all retry attempts are exhausted", async () => {
         const execution = {
             id: "execution-exhausted",
@@ -370,7 +400,10 @@ describe("WorkflowEngine", () => {
                         {
                             id: "step-1",
                             type: "http",
-                            config: { url: "https://example.com", method: "GET" },
+                            config: {
+                                url: "https://example.com",
+                                method: "GET",
+                            },
                             retry: {
                                 maxAttempts: 3,
                                 delayMs: 0,
@@ -394,6 +427,7 @@ describe("WorkflowEngine", () => {
                     id: "step-execution-1",
                     stepId: "step-1",
                     status: "PENDING",
+                    attempts: 0,
                 },
                 {
                     id: "step-execution-2",
@@ -425,7 +459,29 @@ describe("WorkflowEngine", () => {
             execute,
         } as never);
 
-        await workflowEngine.executeWorkflow("execution-exhausted");
+        // Attempt 1: failure, retry scheduled.
+        const firstResult = await workflowEngine.executeWorkflow(
+            "execution-exhausted"
+        );
+        expect(firstResult).toBe(0);
+
+        // Simulate the persisted attempt count before the next worker invocation.
+        execution.steps[0].attempts = 1;
+        execution.steps[0].status = "RETRY_WAIT";
+
+        // Attempt 2: failure, another retry scheduled.
+        const secondResult = await workflowEngine.executeWorkflow(
+            "execution-exhausted"
+        );
+        expect(secondResult).toBe(0);
+
+        execution.steps[0].attempts = 2;
+
+        // Attempt 3: retry limit reached, workflow fails.
+        const thirdResult = await workflowEngine.executeWorkflow(
+            "execution-exhausted"
+        );
+        expect(thirdResult).toBeNull();
 
         expect(execute).toHaveBeenCalledTimes(3);
 

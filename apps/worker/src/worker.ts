@@ -1,14 +1,22 @@
-
 import path from "node:path";
 import dotenv from "dotenv";
 import { Redis } from "ioredis";
 import { Worker } from "bullmq";
 
-import { workflowEngine } from "@flowforge/backend-core";
+import { createWorkflowProcessor } from "./processors/workflow.processor.js";
 
 dotenv.config({
   path: path.resolve(process.cwd(), "../api/.env"),
 });
+
+console.log(
+  "Worker DATABASE_URL loaded:",
+  Boolean(process.env.DATABASE_URL)
+);
+
+const { workflowEngine, addWorkflowJob } = await import(
+  "@flowforge/backend-core"
+);
 
 const redisConnection = new Redis({
   host: process.env.REDIS_HOST || "127.0.0.1",
@@ -22,17 +30,13 @@ interface WorkflowJobData {
 
 const workflowWorker = new Worker<WorkflowJobData>(
   "workflow-execution",
-  async (job) => {
-    console.log(`Processing execution: ${job.data.executionId}`);
+  createWorkflowProcessor({
+    executeWorkflow: (executionId) =>
+      workflowEngine.executeWorkflow(executionId),
 
-    if (job.name !== "execute-workflow") {
-      throw new Error(`Unsupported job type: ${job.name}`);
-    }
-
-    await workflowEngine.executeWorkflow(job.data.executionId);
-
-    console.log(`Execution completed: ${job.data.executionId}`);
-  },
+    addWorkflowJob: (executionId, delay) =>
+      addWorkflowJob(executionId, delay),
+  }),
   {
     connection: redisConnection,
     concurrency: 5,

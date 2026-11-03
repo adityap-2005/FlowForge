@@ -2,8 +2,7 @@
 import { prisma } from "@flowforge/backend-core";
 import { Prisma } from "../generated/prisma/client.js";
 import AppError from "../utils/AppError.js";
-import { addWorkflowJob } from "../queues/workflow.queue.js";
-
+import { addWorkflowJob } from "@flowforge/backend-core";
 interface CreateExecutionInput {
   workflowId: string;
   input?: Record<string, unknown>;
@@ -16,6 +15,13 @@ interface WorkflowStep {
 
 interface WorkflowDefinition {
   steps: WorkflowStep[];
+}
+
+interface GetExecutionsInput {
+  workflowId?: string;
+  status?: Prisma.WorkflowExecutionWhereInput["status"];
+  page: number;
+  limit: number;
 }
 
 
@@ -67,6 +73,70 @@ class ExecutionService {
     await addWorkflowJob(execution.id);
 
     return execution;
+  }
+
+  async getExecutionById(executionId: string) {
+    const execution = await prisma.workflowExecution.findUnique({
+      where: {
+        id: executionId,
+      },
+      include: {
+        steps: true,
+      },
+    });
+
+    if (!execution) {
+      throw new AppError("Execution not found", 404);
+    }
+
+    return execution;
+  }
+
+  async getExecutions({
+    workflowId,
+    status,
+    page,
+    limit,
+  }: GetExecutionsInput) {
+    const where: Prisma.WorkflowExecutionWhereInput = {};
+
+    if (workflowId) {
+      where.workflowId = workflowId;
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    const [executions, total] = await Promise.all([
+      prisma.workflowExecution.findMany({
+        where,
+        orderBy: {
+          createdAt: "desc",
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          _count: {
+            select: {
+              steps: true,
+            },
+          },
+        },
+      }),
+
+      prisma.workflowExecution.count({ where }),
+    ]);
+
+    return {
+      executions,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 }
 

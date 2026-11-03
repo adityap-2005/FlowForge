@@ -42,6 +42,7 @@ export type StepExecutionMinAggregateOutputType = {
   status: $Enums.StepExecutionStatus | null
   error: string | null
   attempts: number | null
+  nextRetryAt: Date | null
   startedAt: Date | null
   completedAt: Date | null
   createdAt: Date | null
@@ -55,6 +56,7 @@ export type StepExecutionMaxAggregateOutputType = {
   status: $Enums.StepExecutionStatus | null
   error: string | null
   attempts: number | null
+  nextRetryAt: Date | null
   startedAt: Date | null
   completedAt: Date | null
   createdAt: Date | null
@@ -70,6 +72,7 @@ export type StepExecutionCountAggregateOutputType = {
   output: number
   error: number
   attempts: number
+  nextRetryAt: number
   startedAt: number
   completedAt: number
   createdAt: number
@@ -93,6 +96,7 @@ export type StepExecutionMinAggregateInputType = {
   status?: true
   error?: true
   attempts?: true
+  nextRetryAt?: true
   startedAt?: true
   completedAt?: true
   createdAt?: true
@@ -106,6 +110,7 @@ export type StepExecutionMaxAggregateInputType = {
   status?: true
   error?: true
   attempts?: true
+  nextRetryAt?: true
   startedAt?: true
   completedAt?: true
   createdAt?: true
@@ -121,6 +126,7 @@ export type StepExecutionCountAggregateInputType = {
   output?: true
   error?: true
   attempts?: true
+  nextRetryAt?: true
   startedAt?: true
   completedAt?: true
   createdAt?: true
@@ -223,6 +229,7 @@ export type StepExecutionGroupByOutputType = {
   output: runtime.JsonValue | null
   error: string | null
   attempts: number
+  nextRetryAt: Date | null
   startedAt: Date | null
   completedAt: Date | null
   createdAt: Date
@@ -261,6 +268,7 @@ export type StepExecutionWhereInput = {
   output?: Prisma.JsonNullableFilter<"StepExecution">
   error?: Prisma.StringNullableFilter<"StepExecution"> | string | null
   attempts?: Prisma.IntFilter<"StepExecution"> | number
+  nextRetryAt?: Prisma.DateTimeNullableFilter<"StepExecution"> | Date | string | null
   startedAt?: Prisma.DateTimeNullableFilter<"StepExecution"> | Date | string | null
   completedAt?: Prisma.DateTimeNullableFilter<"StepExecution"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"StepExecution"> | Date | string
@@ -277,6 +285,7 @@ export type StepExecutionOrderByWithRelationInput = {
   output?: Prisma.SortOrderInput | Prisma.SortOrder
   error?: Prisma.SortOrderInput | Prisma.SortOrder
   attempts?: Prisma.SortOrder
+  nextRetryAt?: Prisma.SortOrderInput | Prisma.SortOrder
   startedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   completedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -297,6 +306,7 @@ export type StepExecutionWhereUniqueInput = Prisma.AtLeast<{
   output?: Prisma.JsonNullableFilter<"StepExecution">
   error?: Prisma.StringNullableFilter<"StepExecution"> | string | null
   attempts?: Prisma.IntFilter<"StepExecution"> | number
+  nextRetryAt?: Prisma.DateTimeNullableFilter<"StepExecution"> | Date | string | null
   startedAt?: Prisma.DateTimeNullableFilter<"StepExecution"> | Date | string | null
   completedAt?: Prisma.DateTimeNullableFilter<"StepExecution"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"StepExecution"> | Date | string
@@ -313,6 +323,7 @@ export type StepExecutionOrderByWithAggregationInput = {
   output?: Prisma.SortOrderInput | Prisma.SortOrder
   error?: Prisma.SortOrderInput | Prisma.SortOrder
   attempts?: Prisma.SortOrder
+  nextRetryAt?: Prisma.SortOrderInput | Prisma.SortOrder
   startedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   completedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -336,6 +347,7 @@ export type StepExecutionScalarWhereWithAggregatesInput = {
   output?: Prisma.JsonNullableWithAggregatesFilter<"StepExecution">
   error?: Prisma.StringNullableWithAggregatesFilter<"StepExecution"> | string | null
   attempts?: Prisma.IntWithAggregatesFilter<"StepExecution"> | number
+  nextRetryAt?: Prisma.DateTimeNullableWithAggregatesFilter<"StepExecution"> | Date | string | null
   startedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"StepExecution"> | Date | string | null
   completedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"StepExecution"> | Date | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"StepExecution"> | Date | string
@@ -350,6 +362,7 @@ export type StepExecutionCreateInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: string | null
   attempts?: number
+  nextRetryAt?: Date | string | null
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   createdAt?: Date | string
@@ -366,6 +379,7 @@ export type StepExecutionUncheckedCreateInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: string | null
   attempts?: number
+  nextRetryAt?: Date | string | null
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   createdAt?: Date | string
@@ -380,6 +394,7 @@ export type StepExecutionUpdateInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   attempts?: Prisma.IntFieldUpdateOperationsInput | number
+  nextRetryAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -396,6 +411,7 @@ export type StepExecutionUncheckedUpdateInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   attempts?: Prisma.IntFieldUpdateOperationsInput | number
+  nextRetryAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -411,6 +427,7 @@ export type StepExecutionCreateManyInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: string | null
   attempts?: number
+  nextRetryAt?: Date | string | null
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   createdAt?: Date | string
@@ -425,6 +442,7 @@ export type StepExecutionUpdateManyMutationInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   attempts?: Prisma.IntFieldUpdateOperationsInput | number
+  nextRetryAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -440,6 +458,7 @@ export type StepExecutionUncheckedUpdateManyInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   attempts?: Prisma.IntFieldUpdateOperationsInput | number
+  nextRetryAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -470,6 +489,7 @@ export type StepExecutionCountOrderByAggregateInput = {
   output?: Prisma.SortOrder
   error?: Prisma.SortOrder
   attempts?: Prisma.SortOrder
+  nextRetryAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -487,6 +507,7 @@ export type StepExecutionMaxOrderByAggregateInput = {
   status?: Prisma.SortOrder
   error?: Prisma.SortOrder
   attempts?: Prisma.SortOrder
+  nextRetryAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -500,6 +521,7 @@ export type StepExecutionMinOrderByAggregateInput = {
   status?: Prisma.SortOrder
   error?: Prisma.SortOrder
   attempts?: Prisma.SortOrder
+  nextRetryAt?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   completedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -564,6 +586,7 @@ export type StepExecutionCreateWithoutExecutionInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: string | null
   attempts?: number
+  nextRetryAt?: Date | string | null
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   createdAt?: Date | string
@@ -578,6 +601,7 @@ export type StepExecutionUncheckedCreateWithoutExecutionInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: string | null
   attempts?: number
+  nextRetryAt?: Date | string | null
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   createdAt?: Date | string
@@ -622,6 +646,7 @@ export type StepExecutionScalarWhereInput = {
   output?: Prisma.JsonNullableFilter<"StepExecution">
   error?: Prisma.StringNullableFilter<"StepExecution"> | string | null
   attempts?: Prisma.IntFilter<"StepExecution"> | number
+  nextRetryAt?: Prisma.DateTimeNullableFilter<"StepExecution"> | Date | string | null
   startedAt?: Prisma.DateTimeNullableFilter<"StepExecution"> | Date | string | null
   completedAt?: Prisma.DateTimeNullableFilter<"StepExecution"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"StepExecution"> | Date | string
@@ -636,6 +661,7 @@ export type StepExecutionCreateManyExecutionInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: string | null
   attempts?: number
+  nextRetryAt?: Date | string | null
   startedAt?: Date | string | null
   completedAt?: Date | string | null
   createdAt?: Date | string
@@ -650,6 +676,7 @@ export type StepExecutionUpdateWithoutExecutionInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   attempts?: Prisma.IntFieldUpdateOperationsInput | number
+  nextRetryAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -664,6 +691,7 @@ export type StepExecutionUncheckedUpdateWithoutExecutionInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   attempts?: Prisma.IntFieldUpdateOperationsInput | number
+  nextRetryAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -678,6 +706,7 @@ export type StepExecutionUncheckedUpdateManyWithoutExecutionInput = {
   output?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   attempts?: Prisma.IntFieldUpdateOperationsInput | number
+  nextRetryAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   completedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -695,6 +724,7 @@ export type StepExecutionSelect<ExtArgs extends runtime.Types.Extensions.Interna
   output?: boolean
   error?: boolean
   attempts?: boolean
+  nextRetryAt?: boolean
   startedAt?: boolean
   completedAt?: boolean
   createdAt?: boolean
@@ -711,6 +741,7 @@ export type StepExecutionSelectCreateManyAndReturn<ExtArgs extends runtime.Types
   output?: boolean
   error?: boolean
   attempts?: boolean
+  nextRetryAt?: boolean
   startedAt?: boolean
   completedAt?: boolean
   createdAt?: boolean
@@ -727,6 +758,7 @@ export type StepExecutionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types
   output?: boolean
   error?: boolean
   attempts?: boolean
+  nextRetryAt?: boolean
   startedAt?: boolean
   completedAt?: boolean
   createdAt?: boolean
@@ -743,12 +775,13 @@ export type StepExecutionSelectScalar = {
   output?: boolean
   error?: boolean
   attempts?: boolean
+  nextRetryAt?: boolean
   startedAt?: boolean
   completedAt?: boolean
   createdAt?: boolean
 }
 
-export type StepExecutionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "executionId" | "stepId" | "stepType" | "status" | "input" | "output" | "error" | "attempts" | "startedAt" | "completedAt" | "createdAt", ExtArgs["result"]["stepExecution"]>
+export type StepExecutionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "executionId" | "stepId" | "stepType" | "status" | "input" | "output" | "error" | "attempts" | "nextRetryAt" | "startedAt" | "completedAt" | "createdAt", ExtArgs["result"]["stepExecution"]>
 export type StepExecutionInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   execution?: boolean | Prisma.WorkflowExecutionDefaultArgs<ExtArgs>
 }
@@ -774,6 +807,7 @@ export type $StepExecutionPayload<ExtArgs extends runtime.Types.Extensions.Inter
     output: runtime.JsonValue | null
     error: string | null
     attempts: number
+    nextRetryAt: Date | null
     startedAt: Date | null
     completedAt: Date | null
     createdAt: Date
@@ -1210,6 +1244,7 @@ export interface StepExecutionFieldRefs {
   readonly output: Prisma.FieldRef<"StepExecution", 'Json'>
   readonly error: Prisma.FieldRef<"StepExecution", 'String'>
   readonly attempts: Prisma.FieldRef<"StepExecution", 'Int'>
+  readonly nextRetryAt: Prisma.FieldRef<"StepExecution", 'DateTime'>
   readonly startedAt: Prisma.FieldRef<"StepExecution", 'DateTime'>
   readonly completedAt: Prisma.FieldRef<"StepExecution", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"StepExecution", 'DateTime'>

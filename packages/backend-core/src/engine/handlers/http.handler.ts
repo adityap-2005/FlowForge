@@ -1,16 +1,29 @@
 import type { StepHandler } from "../step-handler.js";
+import StepExecutionError from "../../errors/step-execution.error.js";
 
 class HttpHandler implements StepHandler {
   async execute(config: Record<string, unknown>): Promise<unknown> {
 
     if (typeof config.url !== "string" || !config.url.trim()) {
-      throw new Error("HTTP handler requires a valid URL");
+      throw new StepExecutionError(
+        "HTTP handler requires a valid URL",
+        false
+      );
     }
 
-    const url = new URL(config.url);
+    let url: URL;
+
+    try {
+      url = new URL(config.url);
+    } catch {
+      throw new StepExecutionError("Invalid URL", false);
+    }
 
     if (!["http:", "https:"].includes(url.protocol)) {
-      throw new Error("Only HTTP and HTTPS URLs are supported");
+      throw new StepExecutionError(
+        "Only HTTP and HTTPS URLs are supported",
+        false
+      );
     }
 
     const method =
@@ -21,7 +34,22 @@ class HttpHandler implements StepHandler {
     const supportedMethods = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
     if (!supportedMethods.includes(method)) {
-      throw new Error("Unsupported HTTP method");
+      throw new StepExecutionError("Unsupported HTTP method", false);
+    }
+
+    const timeoutMs =
+      config.timeoutMs === undefined ? 10000 : config.timeoutMs;
+
+    if (
+      typeof timeoutMs !== "number" ||
+      !Number.isInteger(timeoutMs) ||
+      timeoutMs <= 0 ||
+      timeoutMs > 120000
+    ) {
+      throw new StepExecutionError(
+        "Timeout must be an integer between 1 and 120000 milliseconds",
+        false
+      );
     }
 
     const headers: Record<string, string> = {};
@@ -32,12 +60,18 @@ class HttpHandler implements StepHandler {
         config.headers === null ||
         Array.isArray(config.headers)
       ) {
-        throw new Error("Headers must be an object");
+        throw new StepExecutionError(
+          "Headers must be an object",
+          false
+        );
       }
 
       for (const [key, value] of Object.entries(config.headers)) {
         if (typeof value !== "string") {
-          throw new Error("Header values must be strings");
+          throw new StepExecutionError(
+            "Header values must be strings",
+            false
+          );
         }
 
         headers[key] = value;
@@ -47,18 +81,43 @@ class HttpHandler implements StepHandler {
     const options: RequestInit = {
       method,
       headers,
+      signal: AbortSignal.timeout(timeoutMs),
     };
 
     if (config.body !== undefined) {
       if (method === "GET" || method === "DELETE") {
-        throw new Error(`${method} requests cannot have a body`);
+        throw new StepExecutionError(
+          `${method} requests cannot have a body`,
+          false
+        );
       }
 
       headers["Content-Type"] ??= "application/json";
       options.body = JSON.stringify(config.body);
     }
 
-    const response = await fetch(url, options);
+    let response: Response;
+
+    try {
+      response = await fetch(url, options);
+    } catch (error) {
+      if (error instanceof Error && error.name === "TimeoutError") {
+        throw new StepExecutionError(
+          `HTTP request timed out after ${timeoutMs}ms`,
+          true
+        );
+      }
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Network request failed";
+
+      throw new StepExecutionError(
+        `HTTP network error: ${message}`,
+        true
+      );
+    }
 
     const responseText = await response.text();
 
@@ -73,8 +132,15 @@ class HttpHandler implements StepHandler {
     }
 
     if (!response.ok) {
-      throw new Error(
-        `HTTP request failed with status ${response.status}: ${responseText}`
+      const retryable =
+        response.status === 408 ||
+        response.status === 425 ||
+        response.status === 429 ||
+        response.status >= 500;
+
+      throw new StepExecutionError(
+        `HTTP request failed with status ${response.status}: ${responseText}`,
+        retryable
       );
     }
 

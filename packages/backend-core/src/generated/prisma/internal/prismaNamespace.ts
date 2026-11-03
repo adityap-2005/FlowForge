@@ -803,6 +803,7 @@ export const StepExecutionScalarFieldEnum = {
   output: 'output',
   error: 'error',
   attempts: 'attempts',
+  nextRetryAt: 'nextRetryAt',
   startedAt: 'startedAt',
   completedAt: 'completedAt',
   createdAt: 'createdAt'

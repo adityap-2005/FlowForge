@@ -7,7 +7,8 @@
     "dev": "tsx watch src/worker.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "start": "node dist/worker.js"
+    "start": "node dist/worker.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@flowforge/backend-core": "^1.0.0",

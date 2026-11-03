@@ -1,5 +1,6 @@
 import type { StepHandler } from "../step-handler.js";
 import customActionRegistry from "../custom-action.registry.js";
+import StepExecutionError from "../../errors/step-execution.error.js";
 
 class CustomHandler implements StepHandler {
   async execute(config: Record<string, unknown>): Promise<unknown> {
@@ -8,7 +9,10 @@ class CustomHandler implements StepHandler {
       typeof config.action !== "string" ||
       !config.action.trim()
     ) {
-      throw new Error("A valid custom action name is required");
+      throw new StepExecutionError(
+        "A valid custom action name is required",
+        false
+      );
     }
 
     let input: Record<string, unknown> = {};
@@ -19,7 +23,10 @@ class CustomHandler implements StepHandler {
         config.input === null ||
         Array.isArray(config.input)
       ) {
-        throw new Error("Custom action input must be an object");
+        throw new StepExecutionError(
+          "Custom action input must be an object",
+          false
+        );
       }
 
       input = config.input as Record<string, unknown>;

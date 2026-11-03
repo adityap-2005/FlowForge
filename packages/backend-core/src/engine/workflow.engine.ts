@@ -1,6 +1,8 @@
+
 import handlerRegistry from "./handler.registry.js";
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../config/database.js";
+import StepExecutionError from "../errors/step-execution.error.js";
 
 interface WorkflowStep {
     id: string;
@@ -18,12 +20,7 @@ interface WorkflowDefinition {
 }
 
 class WorkflowEngine {
-
-    private async wait(delayMs: number): Promise<void> {
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
-
-    async executeWorkflow(executionId: string): Promise<void> {
+    async executeWorkflow(executionId: string): Promise<number | null> {
         const claim = await prisma.workflowExecution.updateMany({
             where: {
                 id: executionId,
@@ -36,7 +33,9 @@ class WorkflowEngine {
         });
 
         if (claim.count === 0) {
-            throw new Error("Workflow execution not found or is not available to run");
+            throw new Error(
+                "Workflow execution not found or is not available to run"
+            );
         }
 
         const execution = await prisma.workflowExecution.findUnique({
@@ -54,95 +53,126 @@ class WorkflowEngine {
         const definition =
             execution.workflowVersion.definition as unknown as WorkflowDefinition;
 
-
         for (const step of definition.steps) {
             const stepExecution = execution.steps.find(
                 (item) => item.stepId === step.id
             );
 
+            if (stepExecution?.status === "COMPLETED") {
+                continue;
+            }
+
             try {
                 if (!stepExecution) {
-                    throw new Error(`Step execution record not found: ${step.id}`);
+                    throw new Error(
+                        `Step execution record not found: ${step.id}`
+                    );
                 }
 
-                const maxAttempts = Math.max(1, step.retry?.maxAttempts ?? 3);
-                const delayMs = Math.max(0, step.retry?.delayMs ?? 1000);
+                const maxAttempts = Math.max(
+                    1,
+                    step.retry?.maxAttempts ?? 3
+                );
+
+                const delayMs = Math.max(
+                    0,
+                    step.retry?.delayMs ?? 1000
+                );
+
                 const backoffMultiplier = Math.max(
                     1,
                     step.retry?.backoffMultiplier ?? 2
                 );
 
-                let completed = false;
-                let lastError = "Step execution failed";
+                const currentAttempt = stepExecution.attempts + 1;
 
-                for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-                    try {
-                        await prisma.stepExecution.update({
-                            where: { id: stepExecution.id },
-                            data: {
-                                status: "RUNNING",
-                                startedAt: new Date(),
-                                attempts: { increment: 1 },
-                                input: step.config as Prisma.InputJsonValue,
-                                error: null,
-                            },
-                        });
+                try {
+                    await prisma.stepExecution.update({
+                        where: { id: stepExecution.id },
+                        data: {
+                            status: "RUNNING",
+                            startedAt: new Date(),
+                            attempts: { increment: 1 },
+                            input: step.config as Prisma.InputJsonValue,
+                            error: null,
+                        },
+                    });
 
-                        const handler = handlerRegistry.get(step.type);
-                        const output = await handler.execute(step.config);
+                    const handler = handlerRegistry.get(step.type);
+                    const output = await handler.execute(step.config);
 
-                        await prisma.stepExecution.update({
-                            where: { id: stepExecution.id },
-                            data: {
-                                status: "COMPLETED",
-                                output: output as Prisma.InputJsonValue,
-                                completedAt: new Date(),
-                            },
-                        });
+                    await prisma.stepExecution.update({
+                        where: { id: stepExecution.id },
+                        data: {
+                            status: "COMPLETED",
+                            output: output as Prisma.InputJsonValue,
+                            completedAt: new Date(),
+                            nextRetryAt: null,
+                        },
+                    });
+                } catch (error) {
+                    const lastError =
+                        error instanceof Error
+                            ? error.message
+                            : "Step execution failed";
 
-                        completed = true;
-                        break;
-                    } catch (error) {
-                        lastError =
-                            error instanceof Error
-                                ? error.message
-                                : "Step execution failed";
+                    if (
+                        error instanceof StepExecutionError &&
+                        !error.retryable
+                    ) {
+                        throw error;
+                    }
 
-                        if (attempt === maxAttempts) {
-                            break;
-                        }
+                    if (currentAttempt >= maxAttempts) {
+                        throw new Error(lastError);
+                    }
 
-                        await prisma.stepExecution.update({
+                    const retryDelay =
+                        delayMs *
+                        Math.pow(backoffMultiplier, currentAttempt - 1);
+
+                    const nextRetryAt = new Date(
+                        Date.now() + retryDelay
+                    );
+
+                    await prisma.$transaction(async (tx) => {
+                        await tx.stepExecution.update({
                             where: { id: stepExecution.id },
                             data: {
                                 status: "RETRY_WAIT",
                                 error: lastError,
+                                nextRetryAt,
                             },
                         });
 
-                        const retryDelay =
-                            delayMs * Math.pow(backoffMultiplier, attempt - 1);
+                        await tx.workflowExecution.update({
+                            where: { id: executionId },
+                            data: {
+                                status: "PENDING",
+                            },
+                        });
+                    });
 
-                        await this.wait(retryDelay);
-                    }
-                }
-
-                if (!completed) {
-                    throw new Error(lastError);
+                    return retryDelay;
                 }
             } catch (error) {
                 const errorMessage =
-                    error instanceof Error ? error.message : "Step execution failed";
+                    error instanceof Error
+                        ? error.message
+                        : "Step execution failed";
 
                 await prisma.$transaction(async (tx) => {
-                    await tx.stepExecution.update({
-                        where: { id: stepExecution!.id },
-                        data: {
-                            status: "FAILED",
-                            error: errorMessage,
-                            completedAt: new Date(),
-                        },
-                    });
+                    if (stepExecution) {
+                        await tx.stepExecution.update({
+                            where: { id: stepExecution.id },
+                            data: {
+                                status: "FAILED",
+                                error: errorMessage,
+                                completedAt: new Date(),
+                                nextRetryAt: null,
+                            },
+                        });
+                    }
 
                     await tx.stepExecution.updateMany({
                         where: {
@@ -164,7 +194,7 @@ class WorkflowEngine {
                     });
                 });
 
-                return;
+                return null;
             }
         }
 
@@ -175,6 +205,8 @@ class WorkflowEngine {
                 completedAt: new Date(),
             },
         });
+
+        return null;
     }
 }
 

@@ -3,8 +3,12 @@
         "appendonly",
         "bullmq",
         "cuid",
+        "EAUTH",
+        "EENVELOPE",
+        "EMESSAGE",
         "flowforge",
         "healthcheck",
-        "isready"
+        "isready",
+        "unstub"
     ]
 }
