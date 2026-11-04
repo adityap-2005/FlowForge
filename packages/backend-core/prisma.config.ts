@@ -1,9 +1,12 @@
-import { defineConfig, env } from "prisma/config";
 import dotenv from "dotenv";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { defineConfig, env } from "prisma/config";
+
+const configDirectory = path.dirname(fileURLToPath(import.meta.url));
 
 dotenv.config({
-    path: path.resolve(process.cwd(), "../../apps/api/.env"),
+    path: path.resolve(configDirectory, "../../apps/api/.env"),
 });
 
 export default defineConfig({

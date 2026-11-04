@@ -10,6 +10,8 @@ dotenv.config();
 
 const app = express();
 
+let retryTestRequestCount = 0;
+
 app.use(express.json());
 
 app.get("/health", (_req, res) => {
@@ -24,6 +26,28 @@ app.use("/api/executions", executionRoutes);
 
 app.get("/test-error", (_req, _res, next) => {
     next(new Error("Test server error"));
+});
+
+app.get("/test-retry", (_req, res) => {
+    retryTestRequestCount++;
+
+    if (retryTestRequestCount === 1) {
+        console.log("Retry test endpoint: returning 503");
+
+        setTimeout(() => {
+            res.status(503).json({
+                message: "Temporary server failure",
+            });
+        }, 5000);
+
+        return;
+    }
+
+    console.log("Retry test endpoint: returning 200");
+
+    res.status(200).json({
+        message: "Request successful",
+    });
 });
 
 app.use(notFoundHandler);

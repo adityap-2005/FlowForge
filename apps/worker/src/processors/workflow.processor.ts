@@ -2,11 +2,20 @@ interface WorkflowJobData {
     executionId: string;
 }
 
+interface WorkflowRetryResult {
+    retryDelay: number;
+    nextRetryAt: Date;
+}
+
 interface WorkflowProcessorDependencies {
-    executeWorkflow: (executionId: string) => Promise<number | null>;
+    executeWorkflow: (
+        executionId: string
+    ) => Promise<WorkflowRetryResult | null>;
+
     addWorkflowJob: (
         executionId: string,
-        delay?: number
+        delay?: number,
+        retryAt?: Date
     ) => Promise<unknown>;
 }
 
@@ -28,10 +37,14 @@ export function createWorkflowProcessor({
 
         if (retryDelay !== null) {
             console.log(
-                `Scheduling retry for execution: ${job.data.executionId} in ${retryDelay}ms`
+                `Scheduling retry for execution: ${job.data.executionId} in ${retryDelay.retryDelay}ms`
             );
 
-            await addWorkflowJob(job.data.executionId, retryDelay);
+            await addWorkflowJob(
+                job.data.executionId,
+                retryDelay.retryDelay,
+                retryDelay.nextRetryAt
+            );
 
             console.log(
                 `Retry scheduled successfully for execution: ${job.data.executionId}`

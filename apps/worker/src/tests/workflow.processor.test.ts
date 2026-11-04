@@ -21,7 +21,12 @@ describe("Workflow Processor", () => {
   });
 
   it("should schedule a retry when execution returns a delay", async () => {
-    const executeWorkflow = vi.fn().mockResolvedValue(5000);
+    const nextRetryAt = new Date(Date.now() + 5000);
+
+    const executeWorkflow = vi.fn().mockResolvedValue({
+      retryDelay: 5000,
+      nextRetryAt,
+    });
     const addWorkflowJob = vi.fn().mockResolvedValue(undefined);
 
     const processor = createWorkflowProcessor({
@@ -34,7 +39,11 @@ describe("Workflow Processor", () => {
       data: { executionId: "execution-1" },
     });
 
-    expect(addWorkflowJob).toHaveBeenCalledWith("execution-1", 5000);
+    expect(addWorkflowJob).toHaveBeenCalledWith(
+      "execution-1",
+      5000,
+      nextRetryAt
+    );
   });
 
   it("should reject unsupported job types", async () => {
@@ -57,7 +66,10 @@ describe("Workflow Processor", () => {
   });
 
   it("should propagate retry scheduling failures", async () => {
-    const executeWorkflow = vi.fn().mockResolvedValue(5000);
+    const executeWorkflow = vi.fn().mockResolvedValue({
+      retryDelay: 5000,
+      nextRetryAt: new Date(Date.now() + 5000),
+    });
     const addWorkflowJob = vi.fn().mockRejectedValue(
       new Error("Redis connection failed")
     );

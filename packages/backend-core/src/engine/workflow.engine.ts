@@ -1,8 +1,11 @@
-
 import handlerRegistry from "./handler.registry.js";
 import { Prisma } from "../generated/prisma/client.js";
 import prisma from "../config/database.js";
 import StepExecutionError from "../errors/step-execution.error.js";
+import {
+    redactSensitiveData,
+    sanitizeErrorMessage,
+} from "../utils/data-redaction.js";
 
 interface WorkflowStep {
     id: string;
@@ -18,9 +21,15 @@ interface WorkflowStep {
 interface WorkflowDefinition {
     steps: WorkflowStep[];
 }
+interface WorkflowRetryResult {
+    retryDelay: number;
+    nextRetryAt: Date;
+}
 
 class WorkflowEngine {
-    async executeWorkflow(executionId: string): Promise<number | null> {
+    async executeWorkflow(
+        executionId: string
+    ): Promise<WorkflowRetryResult | null> {
         const claim = await prisma.workflowExecution.updateMany({
             where: {
                 id: executionId,
@@ -93,7 +102,9 @@ class WorkflowEngine {
                             status: "RUNNING",
                             startedAt: new Date(),
                             attempts: { increment: 1 },
-                            input: step.config as Prisma.InputJsonValue,
+                            input: redactSensitiveData(
+                                step.config
+                            ) as Prisma.InputJsonValue,
                             error: null,
                         },
                     });
@@ -105,16 +116,20 @@ class WorkflowEngine {
                         where: { id: stepExecution.id },
                         data: {
                             status: "COMPLETED",
-                            output: output as Prisma.InputJsonValue,
+                            output: redactSensitiveData(
+                                output
+                            ) as Prisma.InputJsonValue,
                             completedAt: new Date(),
                             nextRetryAt: null,
                         },
                     });
                 } catch (error) {
-                    const lastError =
+                    const lastError = sanitizeErrorMessage(
                         error instanceof Error
                             ? error.message
-                            : "Step execution failed";
+                            : "Step execution failed",
+                        step.config
+                    );
 
                     if (
                         error instanceof StepExecutionError &&
@@ -152,14 +167,18 @@ class WorkflowEngine {
                             },
                         });
                     });
-
-                    return retryDelay;
+                    return {
+                        retryDelay,
+                        nextRetryAt,
+                    };
                 }
             } catch (error) {
-                const errorMessage =
+                const errorMessage = sanitizeErrorMessage(
                     error instanceof Error
                         ? error.message
-                        : "Step execution failed";
+                        : "Step execution failed",
+                    step.config
+                );
 
                 await prisma.$transaction(async (tx) => {
                     if (stepExecution) {

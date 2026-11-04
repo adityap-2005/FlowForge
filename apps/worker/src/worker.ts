@@ -10,13 +10,17 @@ dotenv.config({
 });
 
 console.log(
-  "Worker DATABASE_URL loaded:",
-  Boolean(process.env.DATABASE_URL)
+  "Worker DATABASE_URL valid:",
+  Boolean(process.env.DATABASE_URL?.startsWith("postgresql://"))
 );
 
-const { workflowEngine, addWorkflowJob } = await import(
-  "@flowforge/backend-core"
-);
+const {
+  workflowEngine,
+  addWorkflowJob,
+  closeWorkflowQueue,
+} = await import("@flowforge/backend-core");
+
+import { recoverPendingRetries } from "./recovery/retry.recovery.js";
 
 const redisConnection = new Redis({
   host: process.env.REDIS_HOST || "127.0.0.1",
@@ -34,14 +38,38 @@ const workflowWorker = new Worker<WorkflowJobData>(
     executeWorkflow: (executionId) =>
       workflowEngine.executeWorkflow(executionId),
 
-    addWorkflowJob: (executionId, delay) =>
-      addWorkflowJob(executionId, delay),
+    addWorkflowJob: (executionId, delay, retryAt) =>
+      addWorkflowJob(executionId, delay, retryAt),
   }),
   {
     connection: redisConnection,
     concurrency: 5,
   }
 );
+
+const RETRY_RECOVERY_INTERVAL = 5000;
+
+let isRecovering = false;
+
+const recoveryInterval = setInterval(async () => {
+  if (isRecovering) return;
+
+  isRecovering = true;
+
+  try {
+    const recoveryResult = await recoverPendingRetries();
+
+    if (recoveryResult.found > 0) {
+      console.log(
+        `Retry recovery: found ${recoveryResult.found}, scheduled ${recoveryResult.scheduled}`
+      );
+    }
+  } catch (error) {
+    console.error("Retry recovery failed:", error);
+  } finally {
+    isRecovering = false;
+  }
+}, RETRY_RECOVERY_INTERVAL);
 
 workflowWorker.on("completed", (job) => {
   console.log(`Job ${job.id} completed successfully`);
@@ -59,11 +87,19 @@ console.log("FlowForge worker started");
 
 async function shutdown() {
   console.log("Shutting down worker...");
+  clearInterval(recoveryInterval);
 
-  await workflowWorker.close();
-  await redisConnection.quit();
+  try {
+    await workflowWorker.close();
+    await closeWorkflowQueue();
+    await redisConnection.quit();
 
-  process.exit(0);
+    console.log("Worker shut down successfully");
+    process.exit(0);
+  } catch (error) {
+    console.error("Error during worker shutdown:", error);
+    process.exit(1);
+  }
 }
 
 process.on("SIGINT", shutdown);

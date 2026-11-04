@@ -1,5 +1,6 @@
 import type { StepHandler } from "../step-handler.js";
 import StepExecutionError from "../../errors/step-execution.error.js";
+import { validateExternalUrl } from "../../utils/url-security.js";
 
 class HttpHandler implements StepHandler {
   async execute(config: Record<string, unknown>): Promise<unknown> {
@@ -24,6 +25,17 @@ class HttpHandler implements StepHandler {
         "Only HTTP and HTTPS URLs are supported",
         false
       );
+    }
+
+    try {
+      await validateExternalUrl(url);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Destination URL validation failed";
+
+      throw new StepExecutionError(message, false);
     }
 
     const method =
@@ -82,6 +94,7 @@ class HttpHandler implements StepHandler {
       method,
       headers,
       signal: AbortSignal.timeout(timeoutMs),
+      redirect: "manual",
     };
 
     if (config.body !== undefined) {
@@ -116,6 +129,13 @@ class HttpHandler implements StepHandler {
       throw new StepExecutionError(
         `HTTP network error: ${message}`,
         true
+      );
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+      throw new StepExecutionError(
+        "HTTP redirects are not supported",
+        false
       );
     }
 

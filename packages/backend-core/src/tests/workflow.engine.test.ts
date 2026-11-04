@@ -350,7 +350,10 @@ describe("WorkflowEngine", () => {
 
         // First invocation: attempt 1 fails.
         const firstDelay = await workflowEngine.executeWorkflow("execution-retry");
-        expect(firstDelay).toBe(0);
+        expect(firstDelay).toEqual({
+            retryDelay: 0,
+            nextRetryAt: expect.any(Date),
+        });
         expect(execute).toHaveBeenCalledTimes(1);
 
         // Simulate the database state before the second invocation.
@@ -359,7 +362,10 @@ describe("WorkflowEngine", () => {
 
         // Second invocation: attempt 2 fails.
         const secondDelay = await workflowEngine.executeWorkflow("execution-retry");
-        expect(secondDelay).toBe(0);
+        expect(secondDelay).toEqual({
+            retryDelay: 0,
+            nextRetryAt: expect.any(Date),
+        });
         expect(execute).toHaveBeenCalledTimes(2);
 
         // Simulate the database state before the third invocation.
@@ -389,7 +395,7 @@ describe("WorkflowEngine", () => {
             })
         );
     });
-    
+
     it("should fail the workflow when all retry attempts are exhausted", async () => {
         const execution = {
             id: "execution-exhausted",
@@ -463,7 +469,10 @@ describe("WorkflowEngine", () => {
         const firstResult = await workflowEngine.executeWorkflow(
             "execution-exhausted"
         );
-        expect(firstResult).toBe(0);
+        expect(firstResult).toEqual({
+            retryDelay: 0,
+            nextRetryAt: expect.any(Date),
+        });
 
         // Simulate the persisted attempt count before the next worker invocation.
         execution.steps[0].attempts = 1;
@@ -473,7 +482,10 @@ describe("WorkflowEngine", () => {
         const secondResult = await workflowEngine.executeWorkflow(
             "execution-exhausted"
         );
-        expect(secondResult).toBe(0);
+        expect(secondResult).toEqual({
+            retryDelay: 0,
+            nextRetryAt: expect.any(Date),
+        });
 
         execution.steps[0].attempts = 2;
 
@@ -521,6 +533,86 @@ describe("WorkflowEngine", () => {
                 }),
             })
         );
+    });
+
+    it("should prevent concurrent workers from executing the same workflow", async () => {
+        const execution = {
+            id: "execution-concurrent",
+            status: "PENDING",
+            workflowVersion: {
+                definition: {
+                    steps: [
+                        {
+                            id: "step-1",
+                            type: "http",
+                            config: {
+                                url: "https://example.com",
+                                method: "GET",
+                            },
+                        },
+                    ],
+                },
+            },
+            steps: [
+                {
+                    id: "step-execution-1",
+                    stepId: "step-1",
+                    status: "PENDING",
+                    attempts: 0,
+                },
+            ],
+        };
+
+        // First worker claims the execution.
+        // Second worker fails to claim it.
+        vi.mocked(prisma.workflowExecution.updateMany)
+            .mockResolvedValueOnce({ count: 1 } as never)
+            .mockResolvedValueOnce({ count: 0 } as never);
+
+        vi.mocked(prisma.workflowExecution.findUnique)
+            .mockResolvedValue(execution as never);
+
+        vi.mocked(prisma.stepExecution.update).mockResolvedValue({} as never);
+        vi.mocked(prisma.workflowExecution.update).mockResolvedValue({} as never);
+
+        // Keep the first worker busy until the second worker attempts execution.
+        let resolveHandler!: (value: unknown) => void;
+
+        const handlerPromise = new Promise<unknown>((resolve) => {
+            resolveHandler = resolve;
+        });
+
+        const execute = vi.fn().mockReturnValue(handlerPromise);
+
+        vi.mocked(handlerRegistry.get).mockReturnValue({
+            execute,
+        } as never);
+
+        const firstWorker = workflowEngine.executeWorkflow(
+            "execution-concurrent"
+        );
+
+        // Wait until the first worker reaches the step handler.
+        await vi.waitFor(() => {
+            expect(execute).toHaveBeenCalledTimes(1);
+        });
+
+        // Second worker must fail to claim the same execution.
+        await expect(
+            workflowEngine.executeWorkflow("execution-concurrent")
+        ).rejects.toThrow(
+            "Workflow execution not found or is not available to run"
+        );
+
+        expect(execute).toHaveBeenCalledTimes(1);
+
+        // Allow the first worker to finish.
+        resolveHandler({ result: "success" });
+
+        await firstWorker;
+
+        expect(execute).toHaveBeenCalledTimes(1);
+        expect(prisma.workflowExecution.updateMany).toHaveBeenCalledTimes(2);
     });
 
 });
