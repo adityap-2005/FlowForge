@@ -6,6 +6,7 @@ import {
     redactSensitiveData,
     sanitizeErrorMessage,
 } from "../utils/data-redaction.js";
+import { resolveSecrets } from "../utils/secret-resolver.js";
 
 interface WorkflowStep {
     id: string;
@@ -21,6 +22,7 @@ interface WorkflowStep {
 interface WorkflowDefinition {
     steps: WorkflowStep[];
 }
+
 interface WorkflowRetryResult {
     retryDelay: number;
     nextRetryAt: Date;
@@ -62,14 +64,24 @@ class WorkflowEngine {
         const definition =
             execution.workflowVersion.definition as unknown as WorkflowDefinition;
 
+        // Stores the output of the last successfully completed step.
+        let finalOutput: Prisma.InputJsonValue | undefined;
+
         for (const step of definition.steps) {
             const stepExecution = execution.steps.find(
                 (item) => item.stepId === step.id
             );
 
             if (stepExecution?.status === "COMPLETED") {
+                // Preserve the output when resuming an execution.
+                finalOutput = stepExecution.output as
+                    | Prisma.InputJsonValue
+                    | undefined;
+
                 continue;
             }
+
+            let errorConfig: Record<string, unknown> = step.config;
 
             try {
                 if (!stepExecution) {
@@ -109,26 +121,37 @@ class WorkflowEngine {
                         },
                     });
 
+                    const resolvedConfig = resolveSecrets(
+                        step.config
+                    ) as Record<string, unknown>;
+
+                    errorConfig = resolvedConfig;
+
                     const handler = handlerRegistry.get(step.type);
-                    const output = await handler.execute(step.config);
+                    const output = await handler.execute(resolvedConfig);
+
+                    const redactedOutput = redactSensitiveData(
+                        output
+                    ) as Prisma.InputJsonValue;
 
                     await prisma.stepExecution.update({
                         where: { id: stepExecution.id },
                         data: {
                             status: "COMPLETED",
-                            output: redactSensitiveData(
-                                output
-                            ) as Prisma.InputJsonValue,
+                            output: redactedOutput,
                             completedAt: new Date(),
                             nextRetryAt: null,
                         },
                     });
+
+                    // Keep the last successful step's output.
+                    finalOutput = redactedOutput;
                 } catch (error) {
                     const lastError = sanitizeErrorMessage(
                         error instanceof Error
                             ? error.message
                             : "Step execution failed",
-                        step.config
+                        errorConfig
                     );
 
                     if (
@@ -144,7 +167,10 @@ class WorkflowEngine {
 
                     const retryDelay =
                         delayMs *
-                        Math.pow(backoffMultiplier, currentAttempt - 1);
+                        Math.pow(
+                            backoffMultiplier,
+                            currentAttempt - 1
+                        );
 
                     const nextRetryAt = new Date(
                         Date.now() + retryDelay
@@ -167,6 +193,7 @@ class WorkflowEngine {
                             },
                         });
                     });
+
                     return {
                         retryDelay,
                         nextRetryAt,
@@ -177,7 +204,7 @@ class WorkflowEngine {
                     error instanceof Error
                         ? error.message
                         : "Step execution failed",
-                    step.config
+                    errorConfig
                 );
 
                 await prisma.$transaction(async (tx) => {
@@ -217,10 +244,12 @@ class WorkflowEngine {
             }
         }
 
+        // All steps completed successfully.
         await prisma.workflowExecution.update({
             where: { id: executionId },
             data: {
                 status: "COMPLETED",
+                output: finalOutput ?? Prisma.JsonNull,
                 completedAt: new Date(),
             },
         });

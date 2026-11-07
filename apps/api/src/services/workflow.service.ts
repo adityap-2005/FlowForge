@@ -2,8 +2,7 @@ import { prisma } from "@flowforge/backend-core";
 import { Prisma } from "../generated/prisma/client.js";
 
 import AppError from "../utils/AppError.js";
-import validateWorkflowDefinition from "../validators/workflow.validator.js";
-
+import { validateWorkflowDefinition } from "@flowforge/backend-core";
 interface CreateWorkflowInput {
     name: string,
     description?: string,

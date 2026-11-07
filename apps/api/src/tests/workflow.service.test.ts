@@ -4,19 +4,24 @@ import { prisma } from "@flowforge/backend-core";
 import workflowService from "../services/workflow.service.js";
 import AppError from "../utils/AppError.js";
 
-vi.mock("@flowforge/backend-core", () => ({
-    prisma: {
-        workflow: {
-            create: vi.fn(),
-            findMany: vi.fn(),
-            findUnique: vi.fn(),
+vi.mock("@flowforge/backend-core", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@flowforge/backend-core")>();
+
+    return {
+        ...actual,
+        prisma: {
+            workflow: {
+                create: vi.fn(),
+                findMany: vi.fn(),
+                findUnique: vi.fn(),
+            },
+            workflowVersion: {
+                findFirst: vi.fn(),
+                create: vi.fn(),
+            },
         },
-        workflowVersion: {
-            findFirst: vi.fn(),
-            create: vi.fn(),
-        },
-    },
-}));
+    };
+});
 
 describe("WorkflowService", () => {
     beforeEach(() => {

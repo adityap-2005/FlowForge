@@ -2,6 +2,65 @@ interface WorkflowDefinition {
     steps: unknown[];
 }
 
+const SENSITIVE_KEYS = [
+    "authorization",
+    "proxy-authorization",
+    "cookie",
+    "set-cookie",
+    "password",
+    "secret",
+    "token",
+    "api-key",
+    "apikey",
+    "access-key",
+    "private-key",
+    "client-secret",
+];
+
+const ENV_REFERENCE_PATTERN =
+    /^\{\{\s*env\.[A-Za-z_][A-Za-z0-9_]*\s*\}\}$/;
+
+const ENV_REFERENCE_WITH_SCHEME_PATTERN =
+    /^[A-Za-z][A-Za-z0-9_-]*\s+\{\{\s*env\.[A-Za-z_][A-Za-z0-9_]*\s*\}\}$/;
+
+const isSensitiveKey = (key: string): boolean => {
+    const normalizedKey = key.toLowerCase().replace(/_/g, "-");
+
+    return SENSITIVE_KEYS.some((sensitiveKey) =>
+        normalizedKey.includes(sensitiveKey)
+    );
+};
+
+const validateSecretReferences = (value: unknown): boolean => {
+    if (Array.isArray(value)) {
+        return value.every(validateSecretReferences);
+    }
+
+    if (value === null || typeof value !== "object") {
+        return true;
+    }
+
+    for (const [key, item] of Object.entries(value)) {
+        if (isSensitiveKey(key)) {
+            if (
+                typeof item !== "string" ||
+                (
+                    !ENV_REFERENCE_PATTERN.test(item) &&
+                    !ENV_REFERENCE_WITH_SCHEME_PATTERN.test(item)
+                )
+            ) {
+                return false;
+            }
+        }
+
+        if (!validateSecretReferences(item)) {
+            return false;
+        }
+    }
+
+    return true;
+};
+
 const validateHttpConfig = (config: Record<string, unknown>): boolean => {
     if (
         typeof config.url !== "string" ||
@@ -111,6 +170,10 @@ const validateStep = (step: unknown): boolean => {
         typeof workflowStep.config !== "object" ||
         Array.isArray(workflowStep.config)
     ) {
+        return false;
+    }
+
+    if (!validateSecretReferences(workflowStep.config)) {
         return false;
     }
 

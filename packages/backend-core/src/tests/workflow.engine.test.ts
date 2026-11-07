@@ -615,4 +615,107 @@ describe("WorkflowEngine", () => {
         expect(prisma.workflowExecution.updateMany).toHaveBeenCalledTimes(2);
     });
 
+    it("should redact resolved secrets from persisted execution errors", async () => {
+        const secret = "actual-test-secret";
+        const previousToken = process.env.API_TOKEN;
+
+        process.env.API_TOKEN = secret;
+
+        const execution = {
+            id: "execution-secret",
+            status: "PENDING",
+            workflowVersion: {
+                definition: {
+                    steps: [
+                        {
+                            id: "step-1",
+                            type: "http",
+                            config: {
+                                url: "https://example.com",
+                                method: "GET",
+                                headers: {
+                                    Authorization: "{{env.API_TOKEN}}",
+                                },
+                            },
+                            retry: {
+                                maxAttempts: 1,
+                            },
+                        },
+                    ],
+                },
+            },
+            steps: [
+                {
+                    id: "step-execution-1",
+                    stepId: "step-1",
+                    status: "PENDING",
+                    attempts: 0,
+                },
+            ],
+        };
+
+        try {
+            vi.mocked(prisma.workflowExecution.updateMany).mockResolvedValue({
+                count: 1,
+            } as never);
+
+            vi.mocked(prisma.workflowExecution.findUnique).mockResolvedValue(
+                execution as never
+            );
+
+            vi.mocked(prisma.stepExecution.update).mockResolvedValue({} as never);
+            vi.mocked(prisma.stepExecution.updateMany).mockResolvedValue({
+                count: 0,
+            } as never);
+            vi.mocked(prisma.workflowExecution.update).mockResolvedValue({} as never);
+
+            const execute = vi.fn().mockRejectedValue(
+                new Error(`Request failed: ${secret}`)
+            );
+
+            vi.mocked(handlerRegistry.get).mockReturnValue({
+                execute,
+            } as never);
+
+            await workflowEngine.executeWorkflow("execution-secret");
+
+            expect(execute).toHaveBeenCalledWith({
+                url: "https://example.com",
+                method: "GET",
+                headers: {
+                    Authorization: secret,
+                },
+            });
+
+            const failedStepUpdate = [...vi.mocked(prisma.stepExecution.update).mock.calls]
+                .reverse()
+                .find(([call]) => call.data?.status === "FAILED");
+
+            expect(failedStepUpdate).toBeDefined();
+
+            const persistedStepError = failedStepUpdate![0].data?.error;
+
+            expect(persistedStepError).toContain("[REDACTED]");
+            expect(persistedStepError).not.toContain(secret);
+
+            const failedWorkflowUpdate = [...vi.mocked(prisma.workflowExecution.update).mock.calls]
+                .reverse()
+                .find(([call]) => call.data?.status === "FAILED");
+
+            expect(failedWorkflowUpdate).toBeDefined();
+
+            const persistedWorkflowError = failedWorkflowUpdate![0].data?.error;
+
+            expect(persistedWorkflowError).toContain("[REDACTED]");
+            expect(persistedWorkflowError).not.toContain(secret);
+        } finally {
+            if (previousToken === undefined) {
+                delete process.env.API_TOKEN;
+            } else {
+                process.env.API_TOKEN = previousToken;
+            }
+        }
+    });
+
+
 });
